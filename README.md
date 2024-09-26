@@ -16,7 +16,8 @@ This is an unofficial webhook solver for [cert-manager](https://cert-manager.io/
     ```
     kubectl create secret generic porkbun-key \
         --from-literal=api-key=<your key> \
-        --from-literal=secret-key=<your key>
+        --from-literal=secret-key=<your key> \
+        --from-literal=zone-name=example.com.
     ```
 
 3. Create a role and role binding:
