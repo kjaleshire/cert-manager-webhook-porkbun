@@ -18,8 +18,7 @@ import (
 )
 
 type PorkbunSolver struct {
-	kube *kubernetes.Clientset
-	ZoneName string
+	kube     *kubernetes.Clientset
 }
 
 func (e *PorkbunSolver) Name() string {
@@ -29,7 +28,6 @@ func (e *PorkbunSolver) Name() string {
 type Config struct {
 	ApiKeySecretRef    corev1.SecretKeySelector `json:"apiKeySecretRef"`
 	SecretKeySecretRef corev1.SecretKeySelector `json:"secretKeySecretRef"`
-	ZoneNameSecretRef corev1.SecretKeySelector `json:"zoneNameSecretRef"`
 }
 
 func (e *PorkbunSolver) readConfig(request *acme.ChallengeRequest) (*porkbun.Client, error) {
@@ -51,12 +49,6 @@ func (e *PorkbunSolver) readConfig(request *acme.ChallengeRequest) (*porkbun.Cli
 		return nil, err
 	}
 
-	zoneName, err := e.resolveSecretRef(config.ZoneNameSecretRef, request)
-	if err != nil {
-		return nil, err
-	}
-
-	e.ZoneName = zoneName
 	return porkbun.New(secretKey, apiKey), nil
 }
 
@@ -82,12 +74,12 @@ func (e *PorkbunSolver) Present(ch *acme.ChallengeRequest) error {
 		return fmt.Errorf("initialization error: %s", err)
 	}
 
-	// domain := strings.TrimSuffix(ch.ResolvedZone, ".")
+	domain := strings.TrimSuffix(ch.ResolvedZone, ".")
 	entity := strings.TrimSuffix(ch.ResolvedFQDN, "."+ch.ResolvedZone)
 	name := strings.TrimSuffix(ch.ResolvedFQDN, ".")
 
-	klog.Infof("Retrieving records for domain %q", e.ZoneName)
-	records, err := client.RetrieveRecords(context.Background(), e.ZoneName)
+	klog.Infof("Retrieving records for domain %q", domain)
+	records, err := client.RetrieveRecords(context.Background(), domain)
 	if err != nil {
 		return fmt.Errorf("retrieve records error: %s", err)
 	}
@@ -99,7 +91,7 @@ func (e *PorkbunSolver) Present(ch *acme.ChallengeRequest) error {
 		}
 	}
 
-	id, err := client.CreateRecord(context.Background(), e.ZoneName, porkbun.Record{
+	id, err := client.CreateRecord(context.Background(), domain, porkbun.Record{
 		Name:    entity,
 		Type:    "TXT",
 		Content: ch.Key,
@@ -114,16 +106,16 @@ func (e *PorkbunSolver) Present(ch *acme.ChallengeRequest) error {
 }
 
 func (e *PorkbunSolver) CleanUp(ch *acme.ChallengeRequest) error {
-	klog.Infof("Handling cleanup request for %q %q", ch.ResolvedFQDN, ch.Key)
+	klog.Infof("Handling cleanup request for %q %q, zone %q", ch.ResolvedFQDN, ch.Key, ch.ResolvedZone)
 
 	client, err := e.readConfig(ch)
 	if err != nil {
 		return fmt.Errorf("initialization error: %s", err)
 	}
 
-	// domain := strings.TrimSuffix(ch.ResolvedZone, ".")
+	domain := strings.TrimSuffix(ch.ResolvedZone, ".")
 	name := strings.TrimSuffix(ch.ResolvedFQDN, ".")
-	records, err := client.RetrieveRecords(context.Background(), e.ZoneName)
+	records, err := client.RetrieveRecords(context.Background(), domain)
 	if err != nil {
 		return fmt.Errorf("retrieve records error: %s", err)
 	}
@@ -136,7 +128,7 @@ func (e *PorkbunSolver) CleanUp(ch *acme.ChallengeRequest) error {
 			}
 
 			record.Content = ch.Key
-			err = client.DeleteRecord(context.Background(), e.ZoneName, int(id))
+			err = client.DeleteRecord(context.Background(), domain, int(id))
 			if err != nil {
 				return fmt.Errorf("delete record error: %s", err)
 			}
